@@ -1,6 +1,6 @@
 import copernicusmarine
 
-from datetime import date
+from datetime import date, datetime
 from geopy import Point, distance
 
 from utils.db import create_tables, get_drops, update_drop_position, add_position_attribute
@@ -60,13 +60,13 @@ def main():
 
     # update data base, save current drop position and
     # add new movement position
-    position_id =update_drop_position(drop["id"], next_point.latitude, next_point.longitude, next_depth)
+    position_id =update_drop_position(drop["id"], next_point.latitude, next_point.longitude, next_depth, datetime.now())
     # position id might be useful to add additional attributes related to current drop
     # position
-    print('New drop position id {0}'.format(position_id));
+    print('New drop position id {0}'.format(position_id))
     # example of adding additional attributes related to current position
-    add_position_attribute(position_id, 'test_1', 1, 'Test attribute');
-    add_position_attribute(position_id, 'test_2', 2, 'Test attribute');
+    add_position_attribute(position_id, 'test_1', 1, 'Test attribute')
+    add_position_attribute(position_id, 'test_2', 2, 'Test attribute')
 
 if __name__ == '__main__':
   main()
