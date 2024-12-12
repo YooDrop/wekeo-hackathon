@@ -34,6 +34,9 @@ def main():
     # retrieve data sets
     uv = get_dataset("cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["uo", "vo"])
     w = get_dataset("cmems_mod_glo_phy-wcur_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["wo"])
+    t = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["tob"])  # Temperature [degree C]
+    p = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["pbo"])  # Pressure [dbar]
+    s = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["sob"])  # Salinity [parts per thousand or 10^-3]
 
     # uo horizontal speed component
     # vo horizontal speed component
@@ -41,6 +44,10 @@ def main():
     uo = float(uv.uo.sel(latitude = drop["lat"], longitude = drop["lon"], depth = drop["depth"], time = date.today(), method = "nearest"))
     vo = float(uv.vo.sel(latitude = drop["lat"], longitude = drop["lon"], depth = drop["depth"], time = date.today(), method = "nearest"))
     wo = float(w.wo.sel(latitude = drop["lat"], longitude = drop["lon"], depth = drop["depth"], time = date.today(), method = "nearest"))
+
+    temperature = float(t.tob.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    pressure = float(p.pbo.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    salinity = float(s.sob.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
 
     # calculating horizontal distance and direction in
     # order to calculate next geo point of the drop
@@ -63,10 +70,11 @@ def main():
     position_id =update_drop_position(drop["id"], next_point.latitude, next_point.longitude, next_depth, datetime.now())
     # position id might be useful to add additional attributes related to current drop
     # position
-    print('New drop position id {0}'.format(position_id))
+    print('New drop position id {0}'.format(position_id));
     # example of adding additional attributes related to current position
-    add_position_attribute(position_id, 'test_1', 1, 'Test attribute')
-    add_position_attribute(position_id, 'test_2', 2, 'Test attribute')
+    add_position_attribute(position_id, 'temperature', temperature, 'Temperature at this position of the drop')
+    add_position_attribute(position_id, 'pressure', pressure, 'Pressure at this position of the drop')
+    add_position_attribute(position_id, 'salinity', salinity, 'Salinity at this position of the drop')
 
 if __name__ == '__main__':
   main()
