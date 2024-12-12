@@ -20,6 +20,7 @@ def create_tables():
       lat decimal(10, 5) NOT NULL,
       lon decimal(10, 5) NOT NULL,
       depth decimal(15, 3) NOT NULL,
+      created_at timestamptz NOT NULL,
       CONSTRAINT fk_drops
         FOREIGN KEY (drop_id)
         REFERENCES drops (id)
@@ -98,11 +99,11 @@ def get_drops():
   except (psycopg2.DatabaseError, Exception) as error:
     print(error)
 
-def update_drop_position(id, lat, lon, depth):
+def update_drop_position(id, lat, lon, depth, updated_at):
   command = (
     """
     UPDATE drops SET lat=%s, lon=%s, depth=%s WHERE id=%s;
-    INSERT INTO position(drop_id, lat, lon, depth) VALUES (%s, %s, %s, %s)
+    INSERT INTO position(drop_id, lat, lon, depth, created_at) VALUES (%s, %s, %s, %s, %s)
     RETURNING id
     """
   )
@@ -110,7 +111,7 @@ def update_drop_position(id, lat, lon, depth):
     config = load_db_config()
     with psycopg2.connect(**config) as conn:
       with conn.cursor() as cur:
-        cur.execute(command, (lat, lon, depth, id, id, lat, lon, depth));
+        cur.execute(command, (lat, lon, depth, id, id, lat, lon, depth, updated_at));
         return cur.fetchone()[0];
   except (psycopg2.DatabaseError, Exception) as error:
     print(error)
