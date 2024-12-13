@@ -1,10 +1,18 @@
 import copernicusmarine
+import psycopg2
 
-from datetime import date
+from datetime import date, datetime
 from geopy import Point, distance
+from os import environ
 
 from utils.db import create_tables, get_drops, update_drop_position, add_position_attribute
 from utils.move import get_direction, get_speed
+from utils.config import load_db_config
+
+username = environ['CM_USERNAME']
+password = environ['CM_PASSWORD']
+iterations = int(environ['CM_ITERATIONS'])
+
 
 def get_dataset(id, lon, lat, depth, variables):
   dataset = copernicusmarine.open_dataset(
@@ -18,17 +26,14 @@ def get_dataset(id, lon, lat, depth, variables):
     start_datetime = date.today().strftime("%Y-%m-%d"),
     end_datetime = date.today().strftime("%Y-%m-%d"),
     variables = variables,
-    credentials_file = ".copernicusmarine-credentials",
     dataset_part = "default",
-    dataset_version = "202406",
     service="arco-time-series"
   )
   return dataset
 
-def main():
-  create_tables()
+def calculate_drops(conn):
 
-  drops = get_drops() 
+  drops = get_drops(conn) 
 
   for drop in drops:
     # retrieve data sets
@@ -37,7 +42,7 @@ def main():
     t = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["tob"])  # Temperature [degree C]
     p = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["pbo"])  # Pressure [dbar]
     s = get_dataset("cmems_mod_glo_phy_anfc_0.083deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["sob"])  # Salinity [parts per thousand or 10^-3]
-    h = get_dataset("cmems_obs-wave_glo_phy-swh_nrt_multi-l4-2deg_P1D-i", drop["lon"], drop["lat"], drop["depth"], ["VAVH_INST"]) # [m]
+    # h = get_dataset("cmems_obs-wave_glo_phy-swh_nrt_multi-l4-2deg_P1D-i", drop["lon"], drop["lat"], drop["depth"], ["VAVH_INST"]) # [m]
     c = get_dataset("cmems_mod_glo_bgc-pft_anfc_0.25deg_P1D-m", drop["lon"], drop["lat"], drop["depth"], ["chl"]) # [mg/m3]
 
     # uo horizontal speed component
@@ -47,11 +52,11 @@ def main():
     vo = float(uv.vo.sel(latitude = drop["lat"], longitude = drop["lon"], depth = drop["depth"], time = date.today(), method = "nearest"))
     wo = float(w.wo.sel(latitude = drop["lat"], longitude = drop["lon"], depth = drop["depth"], time = date.today(), method = "nearest"))
 
-    temperature = float(t.tob.sel(latitude=drop["lat"], longitude=drop["lon"], depth=drop["depth"], time=date.today(), method="nearest"))
-    pressure = float(p.pbo.sel(latitude=drop["lat"], longitude=drop["lon"], depth=drop["depth"], time=date.today(), method="nearest"))
-    salinity = float(s.sob.sel(latitude=drop["lat"], longitude=drop["lon"], depth=drop["depth"], time=date.today(), method="nearest"))
-    height = float(h.VAVH_INST.sel(latitude=drop["lat"], longitude=drop["lon"], depth=drop["depth"], time=date.today(), method="nearest"))
-    chlorophyll = float(c.chl.sel(latitude=drop["lat"], longitude=drop["lon"], depth=drop["depth"], time=date.today(), method="nearest"))
+    temperature = float(t.tob.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    pressure = float(p.pbo.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    salinity = float(s.sob.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    # height = float(h.VAVH_INST.sel(latitude=drop["lat"], longitude=drop["lon"], time=date.today(), method="nearest"))
+    chlorophyll = float(c.chl.sel(latitude=drop["lat"], longitude=drop["lon"], depth = drop["depth"], time=date.today(), method="nearest"))
 
 
     # calculating horizontal distance and direction in
@@ -72,16 +77,35 @@ def main():
 
     # update data base, save current drop position and
     # add new movement position
-    position_id =update_drop_position(drop["id"], next_point.latitude, next_point.longitude, next_depth)
+    position_id = update_drop_position(conn, drop["id"], next_point.latitude, next_point.longitude, next_depth, datetime.now())
     # position id might be useful to add additional attributes related to current drop
     # position
     print('New drop position id {0}'.format(position_id));
-    # example of adding additional attributes related to current position
-    add_position_attribute(position_id, 'temperature', temperature, 'Temperature at this position of the drop')
-    add_position_attribute(position_id, 'pressure', pressure, 'Pressure at this position of the drop')
-    add_position_attribute(position_id, 'salinity', salinity, 'Salinity at this position of the drop')
-    add_position_attribute(position_id, 'height', height, 'Instant Significant Wave Height at this position of the drop')
-    add_position_attribute(position_id, 'salinity', chlorophyll, 'Mass concentration of chlorophyll-a at this position of the drop')
+
+    add_position_attribute(conn, position_id, 'temperature', temperature, 'Temperature at this position of the drop')
+    add_position_attribute(conn, position_id, 'pressure', pressure, 'Pressure at this position of the drop')
+    add_position_attribute(conn, position_id, 'salinity', salinity, 'Salinity at this position of the drop')
+    # add_position_attribute(conn, position_id, 'height', height, 'Instant Significant Wave Height at this position of the drop')
+    add_position_attribute(conn, position_id, 'chlorophyll', chlorophyll, 'Mass concentration of chlorophyll-a at this position of the drop')
+
+def main():
+  current_iteration = 0
+
+  try:
+    with psycopg2.connect(**load_db_config()) as conn:
+      # create tables and initial data if it does not exist
+      create_tables(conn)
+      # login into copernicus data store system, skip if user already has been logged in
+      copernicusmarine.login(username=username, password=password, skip_if_user_logged_in=True)
+      # simulate movement defined times
+      while current_iteration < iterations:
+        current_iteration = current_iteration + 1;
+        print('Current iteration {0}'.format(current_iteration))
+        calculate_drops(conn)
+      # close collection after simulation finishes      
+      conn.close()
+  except(psycopg2.DatabaseError, Exception) as error:
+    print(error);
 
 if __name__ == '__main__':
   main()
