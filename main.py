@@ -9,7 +9,6 @@ from utils.move import get_direction, get_speed
 
 username = environ['CM_USERNAME']
 password = environ['CM_PASSWORD']
-iterations = environ['CM_ITERATIONS']
 
 copernicusmarine.login(username=username, password=password)
 
